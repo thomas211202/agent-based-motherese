@@ -1,0 +1,21 @@
+name: agent-based-motherese
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.12.7
+  - pip=24.2.0
+  - pytorch=2.5.0
+  - torchvision==0.20.0
+  - torchaudio==2.5.0
+  - pip:
+    - pytorch-lightning==2.4.0
+    - tqdm>=4.66.5
+    - EGG @ git+ssh://git@github.com/facebookresearch/EGG.git@f36d123af22eb0d127d2089c993b4eff8314a43d
+    - matplotlib>=3.9.2
+    - seaborn>=0.13.2
+    - datasets==2.18.0
+    - torchinfo==1.8.0
+    - pandas==2.2.3
