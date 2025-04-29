@@ -56,7 +56,8 @@ def get_transforms(train=True, image_size=(28, 28)):
 
 
 def discrimination_collate_fn(batch, n_distractors=4, seed=42):
-    random.seed(seed)
+    # random.seed(seed)
+    # poss = []
 
     images, labels = zip(*batch)
     images = list(images)
@@ -83,6 +84,8 @@ def discrimination_collate_fn(batch, n_distractors=4, seed=42):
 
         sender_positions.append(insert_pos)
         images_vectors_receiver.append(receiver_images)
+    # poss.append(insert_pos)
+    # poss
 
     images_vectors_sender = torch.stack(images_vectors_sender)
     images_vectors_receiver = torch.stack(

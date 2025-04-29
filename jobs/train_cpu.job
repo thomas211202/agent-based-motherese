@@ -1,0 +1,46 @@
+#!/bin/bash
+
+#SBATCH --partition=rome
+#SBATCH --job-name=abm_experiment
+#SBATCH --ntasks=1
+#SBATCH --mem=64G
+#SBATCH --time=15:0:00
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=thomas.vos2@student.uva.nl
+#SBATCH --output=logging/slurm/%j.out
+
+module purge
+module load 2024
+module spider cuDNN/9.5.0.50-CUDA-12.6.0
+module load Anaconda3/2024.06-1
+
+source activate abm
+
+LOG_DIR=$HOME/agent-based-motherese/data/logs/production/$(date +%Y/%m/%d)
+MODEL_LOG=$HOME/agent-based-motherese/data/models/production/cpu/vision.pth
+
+mkdir -p $LOG_DIR
+
+cd $HOME/agentBasedMotherese/
+
+srun --output=$LOG_DIR/%A_%a.out python -m src.train\
+  --experiment_uuid "2025_01_28_8b6ebb27-fb57-49b9-9726-775c149372b7"\
+  --n_experiments 1\
+  --prod True\
+  --batch_size 32\
+  --pretrain_epochs 0\
+  --vision_from_file $MODEL_LOG\
+  --n_epochs 10\
+  --vocab_size 8\
+  --max_len 3 \
+  --sender_hidden 20 \
+  --receiver_hidden 20\
+  --lr 0.001\
+  --rounds 10\
+  --sender_cell "rnn"\
+  --receiver_cell "rnn"\
+  --dataset "mnist"\
+  --n_distractors 7
+
+wait
+

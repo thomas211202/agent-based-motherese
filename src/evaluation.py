@@ -148,7 +148,8 @@ class CommunicationMetricsCallback(Callback):
         sampled_messages = sampled_messages.view(sampled_messages.size(0), -1)
 
         distance_meanings = self.memory_efficient_pairwise_manhattan(sampled_meanings)
-        distance_messages = torch.cdist(sampled_messages, sampled_messages, p=2)
+        # distance_messages = torch.cdist(sampled_messages, sampled_messages, p=2)
+        distance_messages = torch.cdist(sampled_messages, sampled_messages, p=0)
 
         topsim = spearmanr(distance_messages.cpu().numpy(), distance_meanings.cpu().numpy(), axis=None).correlation
 
@@ -246,11 +247,14 @@ class CommunicationMetricsCallback(Callback):
             logger.info(f"Reading metrics data from {self.metrics_directory}/metrics_data.csv")
             df = pd.read_csv(f"{self.metrics_directory}/metrics_data.csv")
 
-        df["full_epoch"] = np.where(
-            df["control_group"] == False,
-            df["round"] * self.opts.n_epochs + df["epoch"].astype(int),
-            df["epoch"] + np.where(df["round"] >= 1, 10, 0)
-        )
+        # df["full_epoch"] = np.where(
+        #     df["control_group"] == False,
+        #     df["round"] * self.opts.n_epochs + df["epoch"].astype(int),
+        #     df["epoch"] + np.where(df["round"] >= 1, 10, 0)
+        # )
+        logger.info("check1")
+        df["full_epoch"] = df["round"] * self.opts.n_epochs + df["epoch"].astype(int)
+        logger.info("check2")
 
         fig, ax = plt.subplots(2, 2, figsize=(15, 12))
         fig.suptitle('Communication Metrics')
@@ -293,6 +297,8 @@ class CommunicationMetricsCallback(Callback):
         if messages is None or meanings is None:
             logger.warning(f"Epoch {epoch}: Missing messages or meanings in interaction")
             return
+
+        print(messages[0])
 
         topsim = self.calculate_topographic_similarity(messages, meanings)
 
@@ -383,12 +389,15 @@ class CommunicationMetricsCallback(Callback):
 
         logger.table(results, title="Results")
 
-        if epoch == self.opts.n_epochs or (self.control_group and epoch % self.opts.n_epochs == 0):
+        # if epoch == self.opts.n_epochs or (self.control_group and epoch % self.opts.n_epochs == 0):
+        #     self.round += 1
+        if epoch == self.opts.n_epochs:
             self.round += 1
 
-        if (self.round == self.opts.rounds and epoch == self.opts.n_epochs) or (
-                self.control_group and epoch == (self.opts.n_epochs - 1) * self.opts.rounds
-        ):
+        # if (self.round == self.opts.rounds and epoch == self.opts.n_epochs) or (
+        #         self.control_group and epoch == (self.opts.n_epochs - 1) * self.opts.rounds
+        # ):
+        if (self.round == self.opts.rounds and epoch == self.opts.n_epochs):
             logger.info(f"Metrics calculation complete for {self.opts.run_uuid}")
             self.plot()
             if self.control_group:

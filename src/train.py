@@ -1,12 +1,16 @@
 import os
+import time
 import uuid
 
+import numpy as np
 import pandas as pd
 import torch
 import copy
 
 import torch.nn.functional as F
 import egg.core as core
+
+from datetime import timedelta
 
 from .models import Sender, DiscriReceiver, Vision
 from .dataloader import get_datasets, get_loaders
@@ -16,7 +20,7 @@ from .evaluation import CommunicationMetricsCallback
 from .pretraining import pretraining
 
 
-def main(args, device=None):
+def main(args, experiment=None, device=None):
     """
     Main function to run the training
     :param args: list of arguments
@@ -88,6 +92,8 @@ def main(args, device=None):
 
     logger.info(f"Vision module pretrained")
 
+    st = time.time()
+
     sender = core.RnnSenderGS(
         Sender(
             vision,
@@ -147,8 +153,12 @@ def main(args, device=None):
     )
 
     logger.debug("start training: ")
+    durations = []
 
     trainer.train(opts.n_epochs)
+    durations.append(time.time() - st)
+
+    logger.info(f"Round 0 finished in {timedelta(seconds=time.time() - st)} seconds")
 
     logger.info("Training finished")
 
@@ -159,6 +169,7 @@ def main(args, device=None):
     control_group_metric_plot_callback.set_control_group()
 
     for round in range(1, opts.rounds):
+        st = time.time()
         logger.info(f"starting round {round} / {opts.rounds - 1}")
         logger.info("initialising Sender module")
         saved_sender_state = sender.state_dict()
@@ -215,36 +226,53 @@ def main(args, device=None):
 
         trainer.train(opts.n_epochs)
 
-    logger.info("Training finished")
-    logger.info(f"running control group for {opts.n_epochs * (opts.rounds - 1)} epochs")
+        logger.info(f"Round {round} finished in {(time.time() - st).__round__(2)} seconds")
+        experiment_group_rounds_left = int(opts.rounds) - round - 1
+        logger.debug(f"rounds left for current experiment: {experiment_group_rounds_left}")
+        control_group_rounds_left = int(opts.rounds) - 1
+        logger.debug(f"rounds left for control group: {control_group_rounds_left}")
+        total_rounds_left = experiment_group_rounds_left + control_group_rounds_left
+        logger.debug(f"total rounds left: {total_rounds_left}")
+        average_run_duration = np.average(durations)
+        logger.info(f"estimated time remaining for current experiment: {timedelta(seconds=(total_rounds_left * average_run_duration))}")
+        total_duration_current_experiment = (2 * (opts.rounds - 1) + 1) * average_run_duration
+        logger.info(f"estimated time remaining for all experiments: {timedelta(seconds=(total_duration_current_experiment * (opts.n_experiments - experiment) + (total_rounds_left * average_run_duration) ))}")
 
-    sender = core.RnnSenderGS(
-        Sender(
-            vision,
-            opts.sender_hidden,
-        ),
-        vocab_size=opts.vocab_size,
-        embed_dim=opts.sender_embedding,
-        hidden_size=opts.sender_hidden,
-        max_len=opts.max_len,
-        temperature=3.0,
-        cell=opts.sender_cell
-    )
-    sender.load_state_dict(control_group_saved_sender_state)
+        logger.info("Training finished")
+        # logger.info(f"running control group for {opts.n_epochs * (opts.rounds - 1)} epochs")
 
-    receiver = core.RnnReceiverGS(
-        DiscriReceiver(
-            n_hidden=opts.receiver_hidden,
-            image_size=(opts.image_width, opts.image_height)
-        ),
-        vocab_size=opts.vocab_size,
-        embed_dim=opts.receiver_embedding,
-        hidden_size=opts.receiver_hidden,
-        cell=opts.receiver_cell
-    )
-    receiver.load_state_dict(control_group_saved_receiver_state)
+    for round in range(1, opts.rounds):
+        st = time.time()
+        logger.info(f"starting round {round} / {opts.rounds - 1}")
+        logger.info("initialising Sender module")
+        sender = core.RnnSenderGS(
+            Sender(
+                vision,
+                opts.sender_hidden,
+            ),
+            vocab_size=opts.vocab_size,
+            embed_dim=opts.sender_embedding,
+            hidden_size=opts.sender_hidden,
+            max_len=opts.max_len,
+            temperature=3.0,
+            cell=opts.sender_cell
+        )
 
-    callbacks=[
+        sender.load_state_dict(control_group_saved_sender_state)
+
+        receiver = core.RnnReceiverGS(
+            DiscriReceiver(
+                n_hidden=opts.receiver_hidden,
+                image_size=(opts.image_width, opts.image_height)
+            ),
+            vocab_size=opts.vocab_size,
+            embed_dim=opts.receiver_embedding,
+            hidden_size=opts.receiver_hidden,
+            cell=opts.receiver_cell
+        )
+        receiver.load_state_dict(control_group_saved_receiver_state)
+
+        callbacks=[
             core.ConsoleLogger(as_json=True, print_train_loss=True),
             control_group_metric_plot_callback,
             core.TemperatureUpdater(
@@ -253,23 +281,93 @@ def main(args, device=None):
             ),
         ]
 
-    game = core.SenderReceiverRnnGS(
-        sender,
-        receiver,
-        loss,
-    )
 
-    optimizer = core.build_optimizer(game.parameters())
+        game = core.SenderReceiverRnnGS(
+            sender,
+            receiver,
+            loss,
+        )
 
-    trainer = core.Trainer(
-        game=game,
-        optimizer=optimizer,
-        train_data=train_loader,
-        validation_data=test_loader,
-        callbacks=callbacks,
-    )
+        optimizer = core.build_optimizer(game.parameters())
 
-    trainer.train(opts.n_epochs * (opts.rounds-1))
+        trainer = core.Trainer(
+            game=game,
+            optimizer=optimizer,
+            train_data=train_loader,
+            validation_data=test_loader,
+            callbacks=callbacks,
+        )
+
+        trainer.train(opts.n_epochs)
+
+        logger.info(f"Round {round} finished in {(time.time() - st).__round__(2)} seconds")
+        experiment_group_rounds_left = int(opts.rounds) - round - 1
+        logger.debug(f"rounds left for current experiment: {experiment_group_rounds_left}")
+        control_group_rounds_left = int(opts.rounds) - 1
+        logger.debug(f"rounds left for control group: {control_group_rounds_left}")
+        total_rounds_left = experiment_group_rounds_left + control_group_rounds_left
+        logger.debug(f"total rounds left: {total_rounds_left}")
+        average_run_duration = np.average(durations)
+        logger.info(f"estimated time remaining for current experiment: {timedelta(seconds=(total_rounds_left * average_run_duration))}")
+        total_duration_current_experiment = (2 * (opts.rounds - 1) + 1) * average_run_duration
+        logger.info(f"estimated time remaining for all experiments: {timedelta(seconds=(total_duration_current_experiment * (opts.n_experiments - experiment) + (total_rounds_left * average_run_duration) ))}")
+        control_group_saved_sender_state = sender.state_dict()
+        control_group_saved_receiver_state = receiver.state_dict()
+
+
+
+    # sender = core.RnnSenderGS(
+    #     Sender(
+    #         vision,
+    #         opts.sender_hidden,
+    #     ),
+    #     vocab_size=opts.vocab_size,
+    #     embed_dim=opts.sender_embedding,
+    #     hidden_size=opts.sender_hidden,
+    #     max_len=opts.max_len,
+    #     temperature=3.0,
+    #     cell=opts.sender_cell
+    # )
+    # sender.load_state_dict(control_group_saved_sender_state)
+    #
+    # receiver = core.RnnReceiverGS(
+    #     DiscriReceiver(
+    #         n_hidden=opts.receiver_hidden,
+    #         image_size=(opts.image_width, opts.image_height)
+    #     ),
+    #     vocab_size=opts.vocab_size,
+    #     embed_dim=opts.receiver_embedding,
+    #     hidden_size=opts.receiver_hidden,
+    #     cell=opts.receiver_cell
+    # )
+    # receiver.load_state_dict(control_group_saved_receiver_state)
+    #
+    # callbacks=[
+    #         core.ConsoleLogger(as_json=True, print_train_loss=True),
+    #         control_group_metric_plot_callback,
+    #         core.TemperatureUpdater(
+    #             agent=sender,
+    #             decay=0.7
+    #         ),
+    #     ]
+    #
+    # game = core.SenderReceiverRnnGS(
+    #     sender,
+    #     receiver,
+    #     loss,
+    # )
+    #
+    # optimizer = core.build_optimizer(game.parameters())
+    #
+    # trainer = core.Trainer(
+    #     game=game,
+    #     optimizer=optimizer,
+    #     train_data=train_loader,
+    #     validation_data=test_loader,
+    #     callbacks=callbacks,
+    # )
+    #
+    # trainer.train(opts.n_epochs * (opts.rounds-1))
 
     logger.info("Control group training finished")
 
@@ -291,7 +389,7 @@ if __name__ == "__main__":
     run_dfs = []
 
     for i in range(1, n_experiments + 1):
-        run = main(sys.argv[1:])
+        run = main(sys.argv[1:], experiment=i)
         logger.info(f"Run {i}/{n_experiments} finished")
         runs.append(run)
         run_dfs.append(pd.read_csv(f"./src/data/logs/{run}/metrics_data.csv"))

@@ -95,8 +95,7 @@ def pretraining(module: nn.Module, device, train_loader, val_loader, opts, patie
         val_loss, val_accuracy = evaluate(class_prediction, val_loader)
 
         logger.info(
-            f"Epoch [{epoch + 1}/{epochs}] - Train Loss: {train_loss:.4f}, Train Acc: {
-            train_accuracy:.2f}%, Val Loss: {val_loss:.4f}, Val Acc: {val_accuracy:.2f}%"
+            f"Epoch [{epoch + 1}/{epochs}] - Train Loss: {train_loss:.4f}, Train Acc: {train_accuracy:.2f}%, Val Loss: {val_loss:.4f}, Val Acc: {val_accuracy:.2f}%"
         )
 
         train_loss_values.append(train_loss)
