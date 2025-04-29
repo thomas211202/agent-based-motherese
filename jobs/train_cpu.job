@@ -17,7 +17,7 @@ module load Anaconda3/2024.06-1
 source activate abm
 
 LOG_DIR=$HOME/agent-based-motherese/data/logs/production/$(date +%Y/%m/%d)
-MODEL_LOG=$HOME/agent-based-motherese/data/models/production/cpu/vision.pth
+MODEL_LOG=$HOME/agent-based-motherese/data/models/production/cpu/2025/04/29/vision.pth
 
 mkdir -p $LOG_DIR
 
@@ -29,8 +29,8 @@ srun --output=$LOG_DIR/%A_%a.out python -m src.train\
   --prod True\
   --batch_size 32\
   --pretrain_epochs 0\
-  --vision_from_file $MODEL_LOG\
-  --n_epochs 10\
+  --vision_to_file $MODEL_LOG\
+  --n_epochs 1\
   --vocab_size 8\
   --max_len 3 \
   --sender_hidden 20 \
